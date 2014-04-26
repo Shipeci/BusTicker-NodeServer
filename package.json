@@ -1,0 +1,12 @@
+{
+  "name": "BusTickerServer",
+  "description": "Server for bus ticker data",
+  "version": "0.0.1",
+  "private": true,
+  "dependencies": {
+    "express": "4.1.0",
+    "ejs": "1.0.0",
+    "pg": "3.0.0",
+    "xml2js" : "0.4.2"
+  }
+}
