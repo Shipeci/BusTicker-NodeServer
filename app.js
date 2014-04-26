@@ -22,6 +22,10 @@ app.get('/test', function(req, res){ // example get request routing /test to /vi
   res.render('test.html',{});
 });
 
+app.get('/:stopId',function(req,res){ // example get request routing /XXXXX to a JSON file with given structure {stop: XXXXX}
+  res.json({ stop: req.params.stopId });
+});
+
 app.use(function(req, res) { //direct 404s to /views/404.html
   console.log("404 on request: "+req);
   res.render('404.html', { status: 404 });
