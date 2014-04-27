@@ -49,7 +49,7 @@ var findNearestStop = function(req, res){
   var rt = req.params.route; // need to validate stuff!
   var lat = parseFloat(req.params.lat);
   var lng = parseFloat(req.params.lng);
-  var dir = req.params.busDir;
+  var dir = (req.params.busDir).toUpperCase();
 
   var stopCacheKey = "" + rt + dir;
   if (stopCacheKey in stopsCache) {
@@ -92,44 +92,8 @@ var findStops = function(req, res){
   var rt = req.params.route; // need to validate stuff!
   var lat = parseFloat(req.params.lat);
   var lng = parseFloat(req.params.lng);
-  var dir = req.params.busDir;
-  /*
-  var pathString = '/bustime/api/v1/getstops?key='+apikey+'&rt='+rt+"&dir="+dir;
+  var dir = (req.params.busDir).toUpperCase();
 
-  var options = {
-    host : 'realtime.ridemcts.com',
-    path : pathString,
-    method : 'GET'
-  }
-
-  var request = http.request(options, function(response){
-    var body = ""
-    response.on('data', function(data) {
-      body += data;
-    });
-    response.on('end', function() {
-      parseXML(body, function(err, result) {
-        var data = result['bustime-response'];
-        var stops = data['stop'];
-        var numStops = stops.length;
-        var unsortedStops = [];
-        //console.log("Distances to stops");
-        for (var i = 0; i<numStops; i++) {
-          unsortedStops.push({});
-          unsortedStops[i].stopID = parseInt(stops[i].stpid[0]);
-          unsortedStops[i].stopName = stops[i].stpnm[0];
-          unsortedStops[i].lat = parseFloat(stops[i].lat[0]);
-          unsortedStops[i].lon = parseFloat(stops[i].lon[0]);
-        }
-        res.json(unsortedStops);
-      });
-    });
-  });
-  console.log("Sending request to BusTime (stops)");
-  request.on('error', function(e) {
-    console.log('Problem with request: ' + e.message);
-  });
-  request.end(); */
   var stopCacheKey = "" + rt + dir;
   if (stopCacheKey in stopsCache) {
     res.json(stopsCache[stopCacheKey]);
@@ -162,12 +126,13 @@ var getPredictions = function(req, res){
       parseXML(body, function(err, result) {
         var data = result['bustime-response'];
         var predictions = data['prd'];
+        if (!predictions) {res.send("Error: " + data.error[0].msg); return;}
         var numPred = predictions.length;
         var jsonResponse = [];
         for (var i = 0; i<numPred; i++) {
           jsonResponse.push({});
           jsonResponse[i].age = 0;
-          jsonResponse[i].prediction = predictions[i].prdtm[0];
+          jsonResponse[i].prediction = to8601(predictions[i].prdtm[0]);
           jsonResponse[i].delayed = (predictions[i].dly && predictions[i].dly[0] ? true : false);
           jsonResponse[i].route = predictions[i].rt[0];
           jsonResponse[i].direction = predictions[i].rtdir[0];
@@ -200,12 +165,97 @@ var generateStopsCache = function(req, res) {
   console.log("STOPS CACHE FUNCTION NOT AVAILABLE");
 }
 
+var to8601 = function (timeStr) {
+  var timezone = "-05:00";
+  return timeStr.substring(0,4) + "-" + timeStr.substring(4,6) + "-" + timeStr.substring(6,8) + "T" + timeStr.substring(10,15) + timezone;
+}
+
+var getPredictionsNearest = function(req, res) {
+  var lat = parseFloat(req.params.lat);
+  var lng = parseFloat(req.params.lng);
+  var shortestDist, currentDist;
+  var closestIndex = [];
+  var bestForRoute = [];
+  for (var i = 0; i < 2; i++) {
+    var stops = stopsCache[(["21EAST","21WEST"])[i]];
+    var numStops = stops.length;
+    shortestDist = 100000;
+    for (var j = 0; j < numStops; j++) {
+      currentDist = haversineDistance(lat,lng,stops[j].lat,stops[j].lon);
+      if (currentDist < shortestDist) {
+        shortestDist = currentDist;
+        closestIndex[i] = j;
+      }
+    }
+    bestForRoute[i] = shortestDist;
+  }
+
+  var chosenStop = {};
+  if (bestForRoute[0] < bestForRoute[1]) {
+    stops = stopsCache["21EAST"];
+    chosenStop = stops[closestIndex[0]];
+    chosenStop.dist = bestForRoute[0];
+  } else {
+    stops = stopsCache["21WEST"];
+    chosenStop = stops[closestIndex[1]];
+    chosenStop.dist = bestForRoute[1];
+  }
+  var returnedStop = {};
+  var stpid = returnedStop.stopID = chosenStop.stopID;
+  returnedStop.stopName = chosenStop.stopName;
+  returnedStop.distance = chosenStop.dist;
+
+  var rt = 21;
+  var pathString = '/bustime/api/v1/getpredictions?key='+apikey+'&rt='+rt+'&stpid='+stpid;
+  /* if (["EAST", "WEST", "NORTH", "SOUTH"].indexOf(req.params.busDir) > -1) {
+    checkDir = true;
+  } */
+
+  var options = {
+    host : 'realtime.ridemcts.com',
+    path : pathString,
+    method : 'GET'
+  }
+
+  var request = http.request(options, function(response){
+    var body = ""
+    response.on('data', function(data) {
+      body += data;
+    });
+    response.on('end', function() {
+      parseXML(body, function(err, result) {
+        var data = result['bustime-response'];
+        var predictions = data['prd'];
+        if (!predictions) {res.send("Error: " + data.error[0].msg); return;}
+        var numPred = predictions.length;
+        var jsonResponse = []
+        for (var i = 0; i<numPred; i++) {
+          jsonResponse.push({});
+          jsonResponse[i].age = 0;
+          jsonResponse[i].prediction = to8601(predictions[i].prdtm[0]);
+          jsonResponse[i].delayed = (predictions[i].dly && predictions[i].dly[0] ? true : false);
+          jsonResponse[i].route = predictions[i].rt[0];
+          jsonResponse[i].direction = predictions[i].rtdir[0];
+        }
+        res.json(jsonResponse);
+      });
+    });
+  });
+  console.log("Sending request to BusTime (predictions)");
+  request.on('error', function(e) {
+    console.log('Problem with request: ' + e.message);
+  });
+  request.end();
+}
+
+app.get('/predictions/nearest/:lat/:lng', getPredictionsNearest);
 app.get('/predictions/:stopID', getPredictions);
 app.get('/times/:stopID', getPredictions);
 app.get('/next/:stopID', getPredictions);
 app.get('/stop/:route/:busDir/:lat/:lng', findNearestStop);
 app.get('/stop/:route/:busDir', findStops);
 app.get('/routes', getRoutesAvailable);
+
 
 
 /*
