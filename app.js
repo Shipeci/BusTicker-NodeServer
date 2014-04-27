@@ -5,6 +5,8 @@ var parseXML = require('xml2js').parseString;
 var ejs = require('ejs');
 var http = require('http');
 
+var stopsCache = require(__dirname + '/stopsCache.json');
+
 var app = express();
 app.set('port', process.env.PORT || 3000);
 app.use(express.static(__dirname + '/public'));
@@ -48,6 +50,50 @@ var findNearestStop = function(req, res){
   var lat = parseFloat(req.params.lat);
   var lng = parseFloat(req.params.lng);
   var dir = req.params.busDir;
+
+  var stopCacheKey = "" + rt + dir;
+  if (stopCacheKey in stopsCache) {
+    var stops = stopsCache[stopCacheKey];
+    var numStops = stops.length;
+    var unsortedStops = [];
+    //console.log("Distances to stops");
+    for (var i = 0; i<numStops; i++) {
+      unsortedStops.push({});
+      unsortedStops[i].responseObj = {};
+      unsortedStops[i].responseObj.stopID = stops[i].stopID;
+      unsortedStops[i].responseObj.stopName = stops[i].stopName;
+      unsortedStops[i].responseObj.distance = haversineDistance(lat,lng,stops[i].lat,stops[i].lon);
+      //console.log("Stop "+stops[i].stpnm[0]+" is "+unsortedStops[i].responseObj.distance);
+    }
+
+    var sortedStops = [];
+    var shortestDist, currentDist, closestIndex, len, currentObj;
+    while (unsortedStops.length > 1) {
+      len = unsortedStops.length;
+      shortestDist = 100000;
+      for (var i = 0; i<len; i++) {
+        currentDist = unsortedStops[i].responseObj.distance
+        if (currentDist < shortestDist) {
+          shortestDist = currentDist;
+          closestIndex = i;
+        }
+      }
+      currentObj = unsortedStops.splice(closestIndex, 1)[0].responseObj;
+      //console.log(currentObj);
+      sortedStops.push(currentObj);
+    }
+    res.json(sortedStops);
+  } else {
+    res.send("Could not find route "+stopCacheKey+" in cache.");
+  }
+}
+
+var findStops = function(req, res){
+  var rt = req.params.route; // need to validate stuff!
+  var lat = parseFloat(req.params.lat);
+  var lng = parseFloat(req.params.lng);
+  var dir = req.params.busDir;
+  /*
   var pathString = '/bustime/api/v1/getstops?key='+apikey+'&rt='+rt+"&dir="+dir;
 
   var options = {
@@ -70,37 +116,26 @@ var findNearestStop = function(req, res){
         //console.log("Distances to stops");
         for (var i = 0; i<numStops; i++) {
           unsortedStops.push({});
-          unsortedStops[i].responseObj = {};
-          unsortedStops[i].responseObj.stopID = parseInt(stops[i].stpid[0]);
-          unsortedStops[i].responseObj.stopName = stops[i].stpnm[0];
-          unsortedStops[i].responseObj.distance = haversineDistance(lat,lng,stops[i].lat[0],stops[i].lon[0]);
-          //console.log("Stop "+stops[i].stpnm[0]+" is "+unsortedStops[i].responseObj.distance);
+          unsortedStops[i].stopID = parseInt(stops[i].stpid[0]);
+          unsortedStops[i].stopName = stops[i].stpnm[0];
+          unsortedStops[i].lat = parseFloat(stops[i].lat[0]);
+          unsortedStops[i].lon = parseFloat(stops[i].lon[0]);
         }
-
-        var sortedStops = [];
-        var shortestDist, currentDist, closestIndex, len, currentObj;
-        while (unsortedStops.length > 1) {
-          len = unsortedStops.length;
-          shortestDist = 100000;
-          for (var i = 0; i<len; i++) {
-            currentDist = unsortedStops[i].responseObj.distance
-            if (currentDist < shortestDist) {
-              shortestDist = currentDist;
-              closestIndex = i;
-            }
-          }
-          currentObj = unsortedStops.splice(closestIndex, 1)[0].responseObj;
-          //console.log(currentObj);
-          sortedStops.push(currentObj);
-        }
-        res.json(sortedStops);
+        res.json(unsortedStops);
       });
     });
   });
+  console.log("Sending request to BusTime (stops)");
   request.on('error', function(e) {
     console.log('Problem with request: ' + e.message);
   });
-  request.end();
+  request.end(); */
+  var stopCacheKey = "" + rt + dir;
+  if (stopCacheKey in stopsCache) {
+    res.json(stopsCache[stopCacheKey]);
+  } else {
+    res.send("Could not find route "+stopCacheKey+" in cache.");
+  }
 }
 
 var getPredictions = function(req, res){
@@ -141,16 +176,37 @@ var getPredictions = function(req, res){
       });
     });
   });
-  console.log("request sent");
+  console.log("Sending request to BusTime (predictions)");
   request.on('error', function(e) {
     console.log('Problem with request: ' + e.message);
   });
   request.end();
 };
 
+var getRoutesAvailable = function(req, res) {
+  var routes = [];
+  routes.push({
+    "route": 21,
+    "direction": "EAST"
+  });
+  routes.push({
+    "route": 21,
+    "direction": "WEST"
+  });
+  res.json(routes);
+}
+
+var generateStopsCache = function(req, res) {
+  console.log("STOPS CACHE FUNCTION NOT AVAILABLE");
+}
+
 app.get('/predictions/:stopID', getPredictions);
 app.get('/times/:stopID', getPredictions);
+app.get('/next/:stopID', getPredictions);
 app.get('/stop/:route/:busDir/:lat/:lng', findNearestStop);
+app.get('/stop/:route/:busDir', findStops);
+app.get('/routes', getRoutesAvailable);
+
 
 /*
 app.use(function(req, res) { //direct 404s to /views/404.html
