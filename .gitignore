@@ -31,3 +31,6 @@ node_modules
 ehthumbs.db
 Icon?
 Thumbs.db
+
+# my postgres dir
+pgdata
