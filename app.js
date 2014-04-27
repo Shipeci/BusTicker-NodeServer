@@ -17,17 +17,9 @@ app.set('view engine', 'ejs');
 app.engine('html', ejs.renderFile); //set HTML files to be rendered by ejs
 
 
-app.get('/', function(req, res){ // example get request routing the '/' directory to the results of this anonymous function
+app.get('/', function(req, res){ // PUT PUBLIC FACING STUFF HERE
   res.send('Welcome to BusTicker!');
 });
-
-/*
-app.use(function(err, req, res, next){
-  console.error("req: "+req +"\nerror:"+err.stack);
-  res.statusCode = 500;
-  res.render('error',{error:err});
-});
-*/
 
 var apikey = "HWbvqrH8fJgqZ2PPRS6UyfBaW"; //get this out of here
 
@@ -103,7 +95,7 @@ var findStops = function(req, res){
 }
 
 var getPredictions = function(req, res){
-  var rt = 21;
+  var rt = "21";
   var stpid = req.params.stopID;
   //var checkDir = false;
   var pathString = '/bustime/api/v1/getpredictions?key='+apikey+'&rt='+rt+'&stpid='+stpid;
@@ -151,11 +143,11 @@ var getPredictions = function(req, res){
 var getRoutesAvailable = function(req, res) {
   var routes = [];
   routes.push({
-    "route": 21,
+    "route": "21",
     "direction": "EAST"
   });
   routes.push({
-    "route": 21,
+    "route": "21",
     "direction": "WEST"
   });
   res.json(routes);
@@ -248,22 +240,30 @@ var getPredictionsNearest = function(req, res) {
   request.end();
 }
 
+
+// Standard API calls
 app.get('/predictions/nearest/:lat/:lng', getPredictionsNearest);
 app.get('/predictions/:stopID', getPredictions);
-app.get('/times/:stopID', getPredictions);
-app.get('/next/:stopID', getPredictions);
+app.get('/times/:stopID', getPredictions); //outdated
+app.get('/next/:stopID', getPredictions); //outdated
 app.get('/stop/:route/:busDir/:lat/:lng', findNearestStop);
 app.get('/stop/:route/:busDir', findStops);
 app.get('/routes', getRoutesAvailable);
 
 
 
-/*
+
 app.use(function(req, res) { //direct 404s to /views/404.html
   console.log("404 on request: "+req);
   res.render('404.html', { status: 404 });
 });
-*/
+
+app.use(function(err, req, res, next){
+  console.error("req: "+req +"\nerror:"+err.stack);
+  res.statusCode = 500;
+  res.render('error',{error:err});
+});
+
 
 var server = app.listen(3000, function() {
     console.log('Listening on port %d', server.address().port);
