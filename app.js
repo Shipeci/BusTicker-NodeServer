@@ -150,6 +150,7 @@ var getPredictions = function(req, res){
 
 app.get('/predictions/:stopID', getPredictions);
 app.get('/times/:stopID', getPredictions);
+app.get('/next/:stopID', getPredictions);
 app.get('/stop/:route/:busDir/:lat/:lng', findNearestStop);
 
 /*
